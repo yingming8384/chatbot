@@ -15,14 +15,10 @@
 
 """Sequence-to-sequence model with an attention mechanism."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import random
 
 import numpy as np
-from six.moves import xrange  # pylint: disable=redefined-builtin
+from six.moves import xrange
 import tensorflow as tf
 
 import prepareData
@@ -54,20 +50,18 @@ class Seq2SeqModel(object):
       target_vocab_size: size of the target vocabulary.
       buckets: a list of pairs (I, O), where I specifies maximum input length
         that will be processed in that bucket, and O specifies maximum output
-        length. Training instances that have inputs longer than I or outputs
-        longer than O will be pushed to the next bucket and padded accordingly.
+        length. I 其实就是问，O 其实就是答。如果长度大于当前 bucket 设置，那么会传入
+        下一个 bucket，并且自动进行 padding。
         We assume that the list is sorted, e.g., [(2, 4), (8, 16)].
-      size: number of units in each layer of the model.
+      size: 模型每一层的单元的数量。
       num_layers: number of layers in the model.
-      max_gradient_norm: gradients will be clipped to maximally this norm.
-      batch_size: the size of the batches used during training;
-        the model construction is independent of batch_size, so it can be
-        changed after initialization if this is convenient, e.g., for decoding.
-      learning_rate: learning rate to start with.
-      learning_rate_decay_factor: decay learning rate by this much when needed.
-      use_lstm: if true, we use LSTM cells instead of GRU cells.
+      max_gradient_norm: 对梯度进行裁剪，用于防止梯度爆炸。
+      batch_size
+      learning_rate
+      learning_rate_decay_factor
+      use_lstm: 如果设置为 true，那么就使用 LSTM，否则使用 GRU。
       num_samples: number of samples for sampled softmax.
-      forward_only: if set, we do not construct the backward pass in the model.
+      forward_only: 如果为 True，那么不构建模型的后向传播。
     """
     self.source_vocab_size = source_vocab_size
     self.target_vocab_size = target_vocab_size
@@ -80,18 +74,22 @@ class Seq2SeqModel(object):
     # If we use sampled softmax, we need an output projection.
     output_projection = None
     softmax_loss_function = None
-    # Sampled softmax only makes sense if we sample less than vocabulary size.
+
     if num_samples > 0 and num_samples < self.target_vocab_size:
       w = tf.get_variable("proj_w", [size, self.target_vocab_size])
       w_t = tf.transpose(w)
       b = tf.get_variable("proj_b", [self.target_vocab_size])
       output_projection = (w, b)
 
-      def sampled_loss(labels,inputs):
+      def sampled_loss(labels,logits):
         labels = tf.reshape(labels, [-1, 1])
-        return tf.nn.sampled_softmax_loss(w_t, b, labels,inputs,num_samples,self.target_vocab_size)
+        return tf.nn.sampled_softmax_loss(w_t, b, labels,logits,num_samples,self.target_vocab_size)
       
       softmax_loss_function = sampled_loss
+      
+    setattr(tf.contrib.rnn.GRUCell, '__deepcopy__', lambda self, _: self)
+    setattr(tf.contrib.rnn.BasicLSTMCell, '__deepcopy__', lambda self, _: self)
+    setattr(tf.contrib.rnn.MultiRNNCell, '__deepcopy__', lambda self, _: self)
 
     # Create the internal multi-layer cell for our RNN.
     single_cell = tf.contrib.rnn.GRUCell(size)

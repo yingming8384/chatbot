@@ -1,25 +1,3 @@
-
-# -*- coding:utf-8 -*-
-
-# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import math
 import os
 import random
@@ -28,11 +6,10 @@ import time
 import prepareData
 
 import numpy as np
-from six.moves import xrange  
+from six.moves import xrange
 import tensorflow as tf
 
 from configparser import SafeConfigParser
-import prepareData
 import seq2seq_model
     
 gConfig = {}
@@ -47,27 +24,26 @@ def get_config(config_file='seq2seq.ini'):
     return dict(_conf_ints + _conf_floats + _conf_strings)
 
 # 设置不同的桶以及桶的长度，原则两个：1、尽量覆盖所有训练语料语句的长度，2、尽量保持桶里语料的平衡
+# 下面定义了一个列表，每个元素的第一个值表示问的长度的限制，第二个值表示答的长度的限制
+# 在构建数据集的时候，不能超过这个限制
 _buckets = [(1, 10), (10, 15), (20, 25), (40, 50)]
 
 
+# 根据桶的设置返回对应的训练集和测试集数据
 def read_data(source_path, target_path, max_size=None):
-  """Read data from source and target files and put into buckets.
+  """
+  从 source_path 和 target_path 中读取数据并且放到 buckets 中。
 
-  Args:
-    source_path: path to the files with token-ids for the source language.
-    target_path: path to the file with token-ids for the target language;
-      it must be aligned with the source file: n-th line contains the desired
-      output for n-th line from the source_path.
-    max_size: maximum number of lines to read, all other will be ignored;
-      if 0 or None, data files will be read completely (no limit).
+  参数:
+    source_path: 问编号文件的路径。
+    target_path: 答编号文件的路径，它必须和 source_path 对应，也就是说一问一答。
+    max_size: 最多读入多少行数据。如果设置为了 0 或者 None，那么就会读取所有的数据。
 
-  Returns:
-    data_set: a list of length len(_buckets); data_set[n] contains a list of
-      (source, target) pairs read from the provided data files that fit
-      into the n-th bucket, i.e., such that len(source) < _buckets[n][0] and
-      len(target) < _buckets[n][1]; source and target are lists of token-ids.
+  返回:
+    data_set：包含的是与 _buckets 中不同的桶的设置对应的数据集（训练集和测试集）
   """
   data_set = [[] for _ in _buckets]
+  # 我们可以使用 open 打开文件，但是 GFile 更能适应各种不同的文件系统，比如 Google cloud system，HDFS
   with tf.gfile.GFile(source_path, mode="r") as source_file:
     with tf.gfile.GFile(target_path, mode="r") as target_file:
       source, target = source_file.readline(), target_file.readline()
@@ -79,8 +55,10 @@ def read_data(source_path, target_path, max_size=None):
           sys.stdout.flush()
         source_ids = [int(x) for x in source.split()]
         target_ids = [int(x) for x in target.split()]
+        # 在目标末尾加上结束字符
         target_ids.append(prepareData.EOS_ID)
         for bucket_id, (source_size, target_size) in enumerate(_buckets):
+        	# 只有当样本的长度满足要求的时候，才会将这个样本添加到 data_set 中
           if len(source_ids) < source_size and len(target_ids) < target_size:
             data_set[bucket_id].append([source_ids, target_ids])
             break
@@ -91,14 +69,25 @@ def read_data(source_path, target_path, max_size=None):
 def create_model(session, forward_only):
 
   """Create model and initialize or load parameters"""
-  model = seq2seq_model.Seq2SeqModel( gConfig['enc_vocab_size'], gConfig['dec_vocab_size'], _buckets, gConfig['layer_size'], gConfig['num_layers'], gConfig['max_gradient_norm'], gConfig['batch_size'], gConfig['learning_rate'], gConfig['learning_rate_decay_factor'], forward_only=forward_only)
+  model = seq2seq_model.Seq2SeqModel( gConfig['enc_vocab_size'], 
+                                      gConfig['dec_vocab_size'], 
+                                      _buckets, gConfig['layer_size'], 
+                                      gConfig['num_layers'], 
+                                      gConfig['max_gradient_norm'], 
+                                      gConfig['batch_size'], 
+                                      gConfig['learning_rate'], 
+                                      gConfig['learning_rate_decay_factor'], 
+                                      forward_only=forward_only)
 
+  # 如果配置文件中有预训练好的模型，那么就加载这个模型
   if 'pretrained_model' in gConfig:
       model.saver.restore(session,gConfig['pretrained_model'])
       return model
 
   ckpt = tf.train.get_checkpoint_state(gConfig['working_directory'])
   """if ckpt and tf.gfile.Exists(ckpt.model_checkpoint_path):"""
+  # 如果做过 checkpoint 操作，那么就读取保存的参数
+  # 如果没有，就创建一个新的模型
   if ckpt and ckpt.model_checkpoint_path:
     print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
     model.saver.restore(session, ckpt.model_checkpoint_path)
@@ -109,41 +98,53 @@ def create_model(session, forward_only):
 
 
 def train():
- # prepare dataset
-  print("Preparing data in %s" % gConfig['working_directory'])
-  enc_train, dec_train, enc_dev, dec_dev, _, _ = prepareData.prepare_custom_data(gConfig['working_directory'],gConfig['train_enc'],gConfig['train_dec'],gConfig['test_enc'],gConfig['test_dec'],gConfig['enc_vocab_size'],gConfig['dec_vocab_size'])
+ # 准备数据
+  print("准备 %s 目录中的数据" % gConfig['working_directory'])
+  # 创建训练集和测试集的对应的编号文件（将词语转换为编号），创建词汇表文件，下面返回的是这些文件对应的文件路径
+  enc_train, dec_train, enc_test, dec_test, _, _ = prepareData.prepare_custom_data(gConfig['working_directory'],
+    gConfig['train_enc'],
+    gConfig['train_dec'],
+    gConfig['test_enc'],
+    gConfig['test_dec'],
+    gConfig['enc_vocab_size'],
+    gConfig['dec_vocab_size'])
 
  
   # setup config to use BFC allocator
-  config = tf.ConfigProto()  
-  config.gpu_options.allocator_type = 'BFC'
+  # config = tf.ConfigProto()  
+  # config.gpu_options.allocator_type = 'BFC'
 
-  with tf.Session(config=config) as sess:
+  # with tf.Session(config=config) as sess:
+  with tf.Session() as sess:
     # Create model.
-    print("Creating %d layers of %d units." % (gConfig['num_layers'], gConfig['layer_size']))
+    print("创建 %d 层模型，每层有 %d 个单元." % (gConfig['num_layers'], gConfig['layer_size']))
     model = create_model(sess, False)
+    print("### 模型创建完成！ ###")
 
     # 读取数据并计算其长度，将其放入对应的桶中
-    print ("Reading development and training data (limit: %d)."
+    print ("读取训练集数据和测试集数据 (训练集大小限制: %d)."
            % gConfig['max_train_data_size'])
-    dev_set = read_data(enc_dev, dec_dev)
+    test_set = read_data(enc_test, dec_test)
     train_set = read_data(enc_train, dec_train, gConfig['max_train_data_size'])
+    # 统计每个桶对应的训练集大小
     train_bucket_sizes = [len(train_set[b]) for b in xrange(len(_buckets))]
+    print('每个桶对应的训练集大小: ', train_bucket_sizes)
+    # 统计训练集总大小
     train_total_size = float(sum(train_bucket_sizes))
+    print('训练集总大小: ', train_total_size)
 
-    # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
-    # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
-    # the size if i-th training bucket, as used later.
+
+    # 计算每个桶的训练集的数量在总数据集中的占比，结果累加
     train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_total_size
                            for i in xrange(len(train_bucket_sizes))]
 
-    # This is the training loop.
+    # 开始循环训练
     step_time, loss = 0.0, 0.0
     current_step = 0
     previous_losses = []
+    # 模型会一直训练下去，需要我们自己手动停止，但是每隔固定的 step 就会自动保存，所以训练成果会被保存下来
     while True:
-      # Choose a bucket according to data distribution. We pick a random number
-      # in [0, 1] and use the corresponding interval in train_buckets_scale.
+      # 从 0 到 1 之间随机选择一个数，根据上面计算出来的占比选择样本
       random_number_01 = np.random.random_sample()
       bucket_id = min([i for i in xrange(len(train_buckets_scale))
                        if train_buckets_scale[i] > random_number_01])
@@ -175,11 +176,11 @@ def train():
         step_time, loss = 0.0, 0.0
         # Run evals on development set and print their perplexity.
         for bucket_id in xrange(len(_buckets)):
-          if len(dev_set[bucket_id]) == 0:
+          if len(test_set[bucket_id]) == 0:
             print("  eval: empty bucket %d" % (bucket_id))
             continue
           encoder_inputs, decoder_inputs, target_weights = model.get_batch(
-              dev_set, bucket_id)
+              test_set, bucket_id)
           _, eval_loss, _ = model.step(sess, encoder_inputs, decoder_inputs,
                                        target_weights, bucket_id, True)
           eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
@@ -246,18 +247,18 @@ def decode_line(sess, model, enc_vocab, rev_dec_vocab, sentence):
     return " ".join([tf.compat.as_str(rev_dec_vocab[output]) for output in outputs])
 
 if __name__ == '__main__':
+    # 可以从命令行中传入配置文件的路径
     if len(sys.argv) - 1:
         gConfig = get_config(sys.argv[1])
+    # 如果没有设置配置文件的路径，使用默认参数中的配置文件的路径，也就是 seq2seq.ini 文件
     else:
-        # get configuration from seq2seq.ini
         gConfig = get_config()
 
     print('\n>> Mode : %s\n' %(gConfig['mode']))
 
     if gConfig['mode'] == 'train':
-        # start training
         train()
     elif gConfig['mode'] == 'server':
     
         print('Serve Usage : >> python3 webui/app.py')
-        print('# uses seq2seq_serve.ini as conf file')
+        print('# 使用 seq2seq_serve.ini 作为配置文件')
