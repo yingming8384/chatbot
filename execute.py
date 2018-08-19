@@ -66,6 +66,7 @@ def read_data(source_path, target_path, max_size=None):
   return data_set
 
 
+# session 用于分配资源，要想执行 tensorflow 中的运算，就要创建 session 为其分配资源
 def create_model(session, forward_only):
 
   """Create model and initialize or load parameters"""
@@ -84,10 +85,10 @@ def create_model(session, forward_only):
       model.saver.restore(session,gConfig['pretrained_model'])
       return model
 
+  # 获取 checkpoint 的状态
   ckpt = tf.train.get_checkpoint_state(gConfig['working_directory'])
-  """if ckpt and tf.gfile.Exists(ckpt.model_checkpoint_path):"""
   # 如果做过 checkpoint 操作，那么就读取保存的参数
-  # 如果没有，就创建一个新的模型
+  # 如果没有，就初始化所有变量
   if ckpt and ckpt.model_checkpoint_path:
     print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
     model.saver.restore(session, ckpt.model_checkpoint_path)
@@ -155,27 +156,30 @@ def train():
           train_set, bucket_id)
       _, step_loss, _ = model.step(sess, encoder_inputs, decoder_inputs,
                                    target_weights, bucket_id, False)
-      step_time += (time.time() - start_time) / gConfig['steps_per_checkpoint']
-      loss += step_loss / gConfig['steps_per_checkpoint']
+      step_time += (time.time() - start_time)
+      loss += step_loss
       current_step += 1
 
-      # Once in a while, we save checkpoint, print statistics, and run evals.
+      # 每隔 steps_per_checkpoint, 我们都会将训练成果保存，打印训练结果
+      # 并且重置 step_time 和 loss
       if current_step % gConfig['steps_per_checkpoint'] == 0:
-        # jian
-        perplexity = math.exp(loss) if loss < 300 else float('inf')
-        print ("global step %d learning rate %.4f step-time %.2f perplexity "
+        perplexity = math.exp(loss/gConfig['steps_per_checkpoint']) if (loss/gConfig['steps_per_checkpoint']) < 300 else float('inf')
+        print ("global step %d learning rate %.4f average step-time %.2f average perplexity "
                "%.2f" % (model.global_step.eval(), model.learning_rate.eval(),
-                         step_time, perplexity))
-        # Decrease learning rate if no improvement was seen over last 3 times.
-        if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
+                         step_time/gConfig['steps_per_checkpoint'], perplexity))
+        # 如果当前 loss 比过去 3 次训练的 loss 都大，我们就降低学习速率
+        if len(previous_losses) > 2 and step_loss > max(previous_losses[-3:]):
           sess.run(model.learning_rate_decay_op)
-        previous_losses.append(loss)
-        # Save checkpoint and zero timer and loss.
+        # 保存当前 loss
+        previous_losses.append(step_loss)
+        # 设置保存路径Save checkpoint and zero timer and loss.
         checkpoint_path = os.path.join(gConfig['working_directory'], "seq2seq.ckpt")
         model.saver.save(sess, checkpoint_path, global_step=model.global_step)
+        # 重置 step_time 和 loss
         step_time, loss = 0.0, 0.0
-        # Run evals on development set and print their perplexity.
+        # 在测试集上测试模型的性能
         for bucket_id in xrange(len(_buckets)):
+          # 如果测试集中没有数据就继续下次循环
           if len(test_set[bucket_id]) == 0:
             print("  eval: empty bucket %d" % (bucket_id))
             continue
