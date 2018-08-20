@@ -76,27 +76,37 @@ class Seq2SeqModel(object):
     softmax_loss_function = None
 
     if num_samples > 0 and num_samples < self.target_vocab_size:
+      # tf.get_variable 相比于 tf.Variable 更易于共享变量
+      # 由于本项目中每层网络的单元的数量是一样的，所以 w 总共有 size * target_vocab_size 个参数
+      # 因此下面的 w 是整个网络的权重，如果我们每一层的单元不一样，就要为不同的层定义不同的 w
       w = tf.get_variable("proj_w", [size, self.target_vocab_size])
       w_t = tf.transpose(w)
       b = tf.get_variable("proj_b", [self.target_vocab_size])
       output_projection = (w, b)
 
+      # 定义 sampled_loss
       def sampled_loss(labels,logits):
         labels = tf.reshape(labels, [-1, 1])
         return tf.nn.sampled_softmax_loss(w_t, b, labels,logits,num_samples,self.target_vocab_size)
       
+      # 将网络的损失函数设置为前面设置的 sampled_loss
       softmax_loss_function = sampled_loss
       
+    # 下面三行代码用于解决深拷贝带来的问题，必须要有，不必深究
     setattr(tf.contrib.rnn.GRUCell, '__deepcopy__', lambda self, _: self)
     setattr(tf.contrib.rnn.BasicLSTMCell, '__deepcopy__', lambda self, _: self)
     setattr(tf.contrib.rnn.MultiRNNCell, '__deepcopy__', lambda self, _: self)
 
     # Create the internal multi-layer cell for our RNN.
+    # 默认创建具有 size 个隐藏单元的 GRU 层
     single_cell = tf.contrib.rnn.GRUCell(size)
+    # 可以设置使用 LSTM
     if use_lstm:
+      # 创建具有 size 个隐藏单元的 LSTM 层
       single_cell = tf.contrib.rnn.BasicLSTMCell(size)
     cell = single_cell
     if num_layers > 1:
+      # 创建多层循环神经网络
       cell = tf.contrib.rnn.MultiRNNCell([single_cell] * num_layers)
 
     # The seq2seq function: we use embedding for the input and attention.
@@ -142,8 +152,7 @@ class Seq2SeqModel(object):
     else:
       self.outputs, self.losses = tf.contrib.legacy_seq2seq.model_with_buckets(
           self.encoder_inputs, self.decoder_inputs, targets,
-          self.target_weights, buckets,
-          lambda x, y: seq2seq_f(x, y, False),
+          self.target_weights, buckets, lambda x, y: seq2seq_f(x, y, False),
           softmax_loss_function=softmax_loss_function)
 
     # Gradients and SGD update operation for training the model.
@@ -223,7 +232,7 @@ class Seq2SeqModel(object):
       return None, outputs[0], outputs[1:]  # No gradient norm, loss, outputs.
 
   def get_batch(self, data, bucket_id):
-    """Get a random batch of data from the specified bucket, prepare for step.
+    """从指定的 bucket 中获取一批样本用于训练。
 
     To feed data in step(..) it must be a list of batch-major vectors, while
     data here contains single length-major cases. So the main logic of this
