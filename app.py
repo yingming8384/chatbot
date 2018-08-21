@@ -1,7 +1,3 @@
-import sys
-# 经过测试发现，默认情况下，当前包不能被导入，要手动添加路径才行
-sys.path.append('./')
-
 from flask import Flask, render_template, request, jsonify
 import time
 import threading
@@ -44,20 +40,12 @@ def reply():
 @app.route("/")
 def index(): 
     return render_template("index.html")
-#
 
-'''
-初始化seq2seqModel，并进行动作
-
-    1. 调用执行器的主程序
-    2. 生成一个在线decode进程，来提供在线聊天服务
-'''
-#_________________________________________________________________
 
 sess = tf.Session()
 sess, model, enc_vocab, rev_dec_vocab = execute.init_session(sess, conf='seq2seq_serve.ini')
-#_________________________________________________________________
+
 
 # 启动APP
-# if (__name__ == "__main__"): 
-#     app.run(host = '0.0.0.0', port = 8808)
+if (__name__ == "__main__"): 
+    app.run(host = '0.0.0.0', port = 8808)
