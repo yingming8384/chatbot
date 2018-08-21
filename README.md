@@ -2,7 +2,7 @@
 
 #代码执行顺序
 
-1、按照 data_utls.py-->execute.py-->webui/app.py（预测可视化模块）的顺序执行就可以了。
+1、按照 data_utls.py-->execute.py-->app.py（预测可视化模块）的顺序执行就可以了。
 2、超参配置在seq2seq.ini和seq2seq_sever.ini文件中配置。
 3、详细的代码解析：http://gitbook.cn/books/5a4a16da1f2e8d585e464f44/index.html。 
 
