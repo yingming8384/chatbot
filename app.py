@@ -15,7 +15,7 @@ import execute
 # timer.start()
 
 
-zhPattern = re.compile(u'[\u4e00-\u9fa5]+')
+# zhPattern = re.compile(u'[\u4e00-\u9fa5]+')
 
 app = Flask(__name__,static_url_path="/static")
 
@@ -42,10 +42,12 @@ def index():
     return render_template("index.html")
 
 
+# 加载预训练好的模型、预处理好的词汇表
 sess = tf.Session()
+# 这里使用的配置文件是 seq2seq_serve.ini
 sess, model, enc_vocab, rev_dec_vocab = execute.init_session(sess, conf='seq2seq_serve.ini')
 
 
 # 启动APP
 if (__name__ == "__main__"): 
-    app.run(host = '0.0.0.0', port = 8808)
+    app.run(host = '0.0.0.0', port = 6666)

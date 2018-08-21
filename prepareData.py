@@ -121,12 +121,15 @@ def sentence_to_token_ids(sentence, vocabulary, normalize_digits=True):#将输�
   # Normalize digits by 0 before looking words up in the vocabulary.
   return [vocabulary.get(re.sub(_DIGIT_RE, b"0", w), UNK_ID) for w in words]
 
-def initialize_vocabulary(vocabulary_path):#初始化字典，这里的操作与上面的48行的的作用是一样的，是对调字典中的key-value
+#初始化字典
+def initialize_vocabulary(vocabulary_path):
   if gfile.Exists(vocabulary_path):
     rev_vocab = []
     with open(vocabulary_path, "r", encoding='utf-8') as f:
       rev_vocab.extend(f.readlines())
+    # rev_vocab 是词典中所有词语组成的列表
     rev_vocab = [line.strip() for line in rev_vocab]
+    # vocab 是词典（字典）
     vocab = dict([(x, y) for (y, x) in enumerate(rev_vocab)])
     return vocab, rev_vocab
   else:

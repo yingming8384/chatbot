@@ -215,15 +215,17 @@ def init_session(sess, conf='seq2seq.ini'):
     global gConfig
     gConfig = get_config(conf)
  
-    # Create model and load parameters.
     model = create_model(sess, True)
-    model.batch_size = 1  # We decode one sentence at a time.
+    # 一问一答
+    model.batch_size = 1 
 
-    # Load vocabularies.
+    # 获取词典路径
     enc_vocab_path = os.path.join(gConfig['working_directory'],"vocab%d.enc" % gConfig['enc_vocab_size'])
     dec_vocab_path = os.path.join(gConfig['working_directory'],"vocab%d.dec" % gConfig['dec_vocab_size'])
 
+    # 问是字典类型的对象
     enc_vocab, _ = prepareData.initialize_vocabulary(enc_vocab_path)
+    # 答是列表类型的对象
     _, rev_dec_vocab = prepareData.initialize_vocabulary(dec_vocab_path)
 
     return sess, model, enc_vocab, rev_dec_vocab
