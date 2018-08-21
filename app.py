@@ -1,3 +1,7 @@
+import sys
+# 经过测试发现，默认情况下，当前包不能被导入，要手动添加路径才行
+sys.path.append('./')
+
 from flask import Flask, render_template, request, jsonify
 import time
 import threading
