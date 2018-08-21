@@ -269,37 +269,38 @@ class Seq2SeqModel(object):
     # Get a random batch of encoder and decoder inputs from data,
     # pad them if needed, reverse encoder inputs and add GO to decoder.
     for _ in xrange(self.batch_size):
+      # 从对应的桶中随机选择一个样本
       encoder_input, decoder_input = random.choice(data[bucket_id])
 
-      # Encoder inputs are padded and then reversed.
+      # padding 长度不够的 encoder_inputs
       encoder_pad = [prepareData.PAD_ID] * (encoder_size - len(encoder_input))
       encoder_inputs.append(list(reversed(encoder_input + encoder_pad)))
 
-      # Decoder inputs get an extra "GO" symbol, and are padded then.
+      # 先添加一个 GO 符号到 decoder_inputs 中，然后 padding
       decoder_pad_size = decoder_size - len(decoder_input) - 1
       decoder_inputs.append([prepareData.GO_ID] + decoder_input +
                             [prepareData.PAD_ID] * decoder_pad_size)
 
-    # Now we create batch-major vectors from the data selected above.
     batch_encoder_inputs, batch_decoder_inputs, batch_weights = [], [], []
 
-    # Batch encoder inputs are just re-indexed encoder_inputs.
+    # batch_encoder_inputs 和 encoder_inputs 的内容是一样的，不过 re-index 罢了
     for length_idx in xrange(encoder_size):
       batch_encoder_inputs.append(
           np.array([encoder_inputs[batch_idx][length_idx]
                     for batch_idx in xrange(self.batch_size)], dtype=np.int32))
 
-    # Batch decoder inputs are re-indexed decoder_inputs, we create weights.
+    # batch_decoder_inputs 和 decoder_inputs 的内容是一样的，不过 re-index 罢了
+    # 同时创建 batch_weights
     for length_idx in xrange(decoder_size):
       batch_decoder_inputs.append(
           np.array([decoder_inputs[batch_idx][length_idx]
                     for batch_idx in xrange(self.batch_size)], dtype=np.int32))
 
-      # Create target_weights to be 0 for targets that are padding.
+      # 创建 batch_weights 矩阵，初始化为全 1 的矩阵
+      # 填充部分的权重设置为 0
       batch_weight = np.ones(self.batch_size, dtype=np.float32)
       for batch_idx in xrange(self.batch_size):
-        # We set weight to 0 if the corresponding target is a PAD symbol.
-        # The corresponding target is decoder_input shifted by 1 forward.
+        # target 是 decoder_input 向左偏移一个 item 的结果
         if length_idx < decoder_size - 1:
           target = decoder_inputs[batch_idx][length_idx + 1]
         if length_idx == decoder_size - 1 or target == prepareData.PAD_ID:
