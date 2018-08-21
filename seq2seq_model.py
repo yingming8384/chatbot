@@ -87,7 +87,9 @@ class Seq2SeqModel(object):
       # 定义 sampled_loss
       def sampled_loss(labels,logits):
         labels = tf.reshape(labels, [-1, 1])
-        return tf.nn.sampled_softmax_loss(w_t, b, labels,logits,num_samples,self.target_vocab_size)
+        return tf.nn.sampled_softmax_loss(w_t, b, labels,logits,
+                                          num_samples,
+                                          self.target_vocab_size)
       
       # 将网络的损失函数设置为前面设置的 sampled_loss
       softmax_loss_function = sampled_loss
@@ -97,7 +99,6 @@ class Seq2SeqModel(object):
     setattr(tf.contrib.rnn.BasicLSTMCell, '__deepcopy__', lambda self, _: self)
     setattr(tf.contrib.rnn.MultiRNNCell, '__deepcopy__', lambda self, _: self)
 
-    # Create the internal multi-layer cell for our RNN.
     # 默认创建具有 size 个隐藏单元的 GRU 层
     single_cell = tf.contrib.rnn.GRUCell(size)
     # 可以设置使用 LSTM
@@ -109,8 +110,15 @@ class Seq2SeqModel(object):
       # 创建多层循环神经网络
       cell = tf.contrib.rnn.MultiRNNCell([single_cell] * num_layers)
 
-    # The seq2seq function: we use embedding for the input and attention.
+    # 下面的函数定义了一个序列到序列模型，RNN+Attention
     def seq2seq_f(encoder_inputs, decoder_inputs, do_decode):
+      # encoder_inputs 和 decoder_inputs 的 shape 都是 [batch_size]
+      # 下面的函数为 encoder_inputs 创建一个嵌入层，使用 RNN 对其进行编码，将编码结果保留给后面的 Attention 使用
+      # 也会为 decoder_inputs 创建一个嵌入层，使用 RNN 对其进行编码，
+      # 之后会运行 Attention 解码器，它会使用到前面产生的信息
+      # 标准情况下，我们都会将 feed_previous 参数设置为 False
+      # 该函数的返回值是 (outputs, state)
+      # 其中的 outputs 在这里就是 [batch_size * target_vocab_size]
       return tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(
           encoder_inputs, decoder_inputs, cell,
           num_encoder_symbols=source_vocab_size,
@@ -123,16 +131,18 @@ class Seq2SeqModel(object):
     self.encoder_inputs = []
     self.decoder_inputs = []
     self.target_weights = []
-    for i in xrange(buckets[-1][0]):  # Last bucket is the biggest one.
+    # buckets[-1][0] 是 bucket 中定义的最大的问的长度
+    for i in xrange(buckets[-1][0]):
       self.encoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
                                                 name="encoder{0}".format(i)))
+    # buckets[-1][1] 是 bucket 中定义的最大的答的长度
     for i in xrange(buckets[-1][1] + 1):
       self.decoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
                                                 name="decoder{0}".format(i)))
       self.target_weights.append(tf.placeholder(tf.float32, shape=[None],
                                                 name="weight{0}".format(i)))
 
-    # Our targets are decoder inputs shifted by one.
+    # targets 是 decoder_inputs 向左偏移一个 item.
     targets = [self.decoder_inputs[i + 1]
                for i in xrange(len(self.decoder_inputs) - 1)]
 
@@ -150,25 +160,31 @@ class Seq2SeqModel(object):
               for output in self.outputs[b]
           ]
     else:
+      # 创建一个支持 bucket 的序列到序列模型
       self.outputs, self.losses = tf.contrib.legacy_seq2seq.model_with_buckets(
           self.encoder_inputs, self.decoder_inputs, targets,
           self.target_weights, buckets, lambda x, y: seq2seq_f(x, y, False),
           softmax_loss_function=softmax_loss_function)
 
-    # Gradients and SGD update operation for training the model.
+    # 使用梯度下降优化模型
+    # 返回所有 trainable=True 的 Variable
     params = tf.trainable_variables()
     if not forward_only:
       self.gradient_norms = []
       self.updates = []
       opt = tf.train.GradientDescentOptimizer(self.learning_rate)
       for b in xrange(len(buckets)):
+        # 返回梯度列表
         gradients = tf.gradients(self.losses[b], params)
+        # 返回裁剪过的梯度和全局 norm（全局 norm 的计算参见文档）
         clipped_gradients, norm = tf.clip_by_global_norm(gradients,
                                                          max_gradient_norm)
         self.gradient_norms.append(norm)
+        # 将梯度和参数进行一一对应，设置了 global_step 之后，每次操作都会增加 global_step 的值
         self.updates.append(opt.apply_gradients(
             zip(clipped_gradients, params), global_step=self.global_step))
 
+    # 保存所有的 Variable，便于之后恢复
     self.saver = tf.train.Saver(tf.all_variables())
 
   def step(self, session, encoder_inputs, decoder_inputs, target_weights,
