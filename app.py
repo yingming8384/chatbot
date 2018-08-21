@@ -23,12 +23,11 @@ app = Flask(__name__,static_url_path="/static")
 def reply():
 
     req_msg = request.form['msg']
-    res_msg = '^_^'
     req_msg=" ".join(jieba.cut(req_msg))
-    #print(req_msg)
+    print('***********', req_msg, '***********')
     res_msg = execute.decode_line(sess, model, enc_vocab, rev_dec_vocab, req_msg )
     
-    res_msg = res_msg.replace('_UNK', '^_^')
+    res_msg = res_msg.replace('__UNK__', '!')
     res_msg=res_msg.strip()
     
     # 如果接受到的内容为空，则给出相应的恢复
@@ -50,4 +49,4 @@ sess, model, enc_vocab, rev_dec_vocab = execute.init_session(sess, conf='seq2seq
 
 # 启动APP
 if (__name__ == "__main__"): 
-    app.run(host = '0.0.0.0', port = 6666)
+    app.run(host = '0.0.0.0', port = 1992)

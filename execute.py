@@ -230,23 +230,26 @@ def init_session(sess, conf='seq2seq.ini'):
 
     return sess, model, enc_vocab, rev_dec_vocab
 
+# 一问一答
 def decode_line(sess, model, enc_vocab, rev_dec_vocab, sentence):
-    # Get token-ids for the input sentence.
+    # 把句子转换成编号列表
+    # tf.compat.as_bytes() 用于将句子用 utf-8 编码而不管传进来的句子是已经编码好的还是没有编码好的
     token_ids = prepareData.sentence_to_token_ids(tf.compat.as_bytes(sentence), enc_vocab)
 
-    # Which bucket does it belong to?
+    # 判断问属于哪个 bucket，取最小的
     bucket_id = min([b for b in xrange(len(_buckets)) if _buckets[b][0] > len(token_ids)])
 
-    # Get a 1-element batch to feed the sentence to the model.
-    encoder_inputs, decoder_inputs, target_weights = model.get_batch({bucket_id: [(token_ids, [])]}, bucket_id)
+    # 对句子编号进行处理，产生模型的正确输入
+    encoder_inputs, decoder_inputs, target_weights = model.get_batch({bucket_id: [(token_ids, [])]}, 
+                                                                      bucket_id)
 
-    # Get output logits for the sentence.
+    # 使用模型进行预测
     _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, True)
 
-    # This is a greedy decoder - outputs are just argmaxes of output_logits.
+    # 将输出转换成词语的数字编号
     outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
 
-    # If there is an EOS symbol in outputs, cut them at that point.
+    # 如果生成了 EOS，那么就将 EOS 后面的部分全部裁减掉
     if prepareData.EOS_ID in outputs:
         outputs = outputs[:outputs.index(prepareData.EOS_ID)]
 

@@ -113,12 +113,14 @@ def basic_tokenizer(sentence):
     words.extend(re.split(_WORD_SPLIT, space_separated_fragment))
   return [w for w in words if w]
 
-def sentence_to_token_ids(sentence, vocabulary, normalize_digits=True):#将输入语句从中文字符转换成数字符号
+#将输入语句从中文字符转换成数字符号
+# normalize_digits 为是否将数字转换为 0
+def sentence_to_token_ids(sentence, vocabulary, normalize_digits=True):
 
   words = basic_tokenizer(sentence)
   if not normalize_digits:
     return [vocabulary.get(w, UNK_ID) for w in words]
-  # Normalize digits by 0 before looking words up in the vocabulary.
+  # 查看字典之前将数字全部转换为 0
   return [vocabulary.get(re.sub(_DIGIT_RE, b"0", w), UNK_ID) for w in words]
 
 #初始化字典
