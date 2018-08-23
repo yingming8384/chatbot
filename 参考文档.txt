@@ -1,0 +1,6 @@
+attention机制解释：
+https://www.quora.com/What-is-exactly-the-attention-mechanism-introduced-to-RNN-recurrent-neural-network-It-would-be-nice-if-you-could-make-it-easy-to-understand
+
+RNN原理解释：
+CS231
+《Deep Learning》
