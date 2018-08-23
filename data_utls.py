@@ -47,7 +47,7 @@ with open(conv_path, encoding='utf-8') as f:
 			one_conv.append(line.split(' ')[1])
 
 		l+=1
-		if l % 10000 == 0:
+		if l % 100000 == 0:
 			print('step 2 convs 处理进度：%d' % l)
  
 # 把对话分成问与答两个部分
@@ -70,7 +70,7 @@ for conv in convs:
 		else:
 			conv[i]=" ".join(jieba.cut(conv[i]))
 			response.append(conv[i])
-		if c%1000 == 0:
+		if c%10000 == 0:
 			print('step 2 问答处理进度：%d, %d' % (i, c))
 	c += 1
 print('### step 2 ###')
@@ -99,7 +99,7 @@ def convert_seq2seq_files(questions, answers, TESTSET_SIZE):
         else:
             train_enc.write(questions[i]+'\n')
             train_dec.write(answers[i]+ '\n' )
-        if i % 1000 == 0:
+        if i % 10000 == 0:
             print(len(range(len(questions))), '处理进度：', i)
  
     train_enc.close()
@@ -108,6 +108,7 @@ def convert_seq2seq_files(questions, answers, TESTSET_SIZE):
     test_dec.close()
  
 # 问的文件后缀是.enc，答的文件后缀是.dec
-convert_seq2seq_files(ask, response, 10000)
+# 测试集数据从 10000 调整到 100000
+convert_seq2seq_files(ask, response, 100000)
 print('### step 3 ###')
 print('### 训练集和测试集数据创建完成 ###')
