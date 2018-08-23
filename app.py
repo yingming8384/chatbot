@@ -30,7 +30,7 @@ def reply():
     res_msg = res_msg.replace('__UNK__', '!')
     res_msg=res_msg.strip()
     
-    # 如果接受到的内容为空，则给出相应的恢复
+    # 如果接受到的内容为空，则给出相应的回复
     if res_msg == ' ':
       res_msg = '请与我聊聊天吧'
 
